@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo } from "react";
 import type {
   GameState,
   HexTile,
@@ -7,7 +7,15 @@ import type {
   Building,
   Road,
   Port,
-} from '../types';
+} from "../types";
+
+import imgWood from "../assets/board/wood.jpg";
+import imgBrick from "../assets/board/brick.jpg";
+import imgSheep from "../assets/board/sheep.jpg";
+import imgWheat from "../assets/board/wheat.jpg";
+import imgOre from "../assets/board/ore.jpg";
+import imgDesert from "../assets/board/desert.jpg";
+import imgSea from "../assets/board/sea.jpg";
 
 // ---- Props ----
 
@@ -27,30 +35,34 @@ const HEX_SIZE = 1;
 const SQRT3 = Math.sqrt(3);
 const PIXEL_SCALE = 60;
 
-const TERRAIN_COLORS: Record<Terrain, string> = {
-  wood: 'forestgreen',
-  brick: 'firebrick',
-  sheep: 'limegreen',
-  wheat: 'gold',
-  ore: 'slategray',
-  desert: 'sandybrown',
+const TERRAIN_IMAGES: Record<Terrain, string> = {
+  wood: imgWood,
+  brick: imgBrick,
+  sheep: imgSheep,
+  wheat: imgWheat,
+  ore: imgOre,
+  desert: imgDesert,
 };
 
 const PLAYER_COLOR_MAP: Record<string, string> = {
-  red: '#e74c3c',
-  blue: '#3498db',
-  white: '#ecf0f1',
-  orange: '#e67e22',
+  red: "#e74c3c",
+  blue: "#3498db",
+  white: "#ecf0f1",
+  orange: "#e67e22",
 };
 
 const PORT_EMOJI: Record<PortType, string> = {
-  any: '3:1',
-  wood: '2:1 🌲',
-  brick: '2:1 🧱',
-  sheep: '2:1 🐑',
-  wheat: '2:1 🌾',
-  ore: '2:1 ⛏️',
+  any: "3:1",
+  wood: "2:1 🌲",
+  brick: "2:1 🧱",
+  sheep: "2:1 🐑",
+  wheat: "2:1 🌾",
+  ore: "2:1 🪨",
 };
+
+const HEX_RADIUS = HEX_SIZE * PIXEL_SCALE;
+const HEX_WIDTH = HEX_RADIUS * 2;
+const HEX_HEIGHT = SQRT3 * HEX_RADIUS;
 
 // ---- Geometry helpers ----
 
@@ -70,10 +82,9 @@ function hexCornerPoints(cx: number, cy: number): string {
     const py = cy + HEX_SIZE * PIXEL_SCALE * Math.sin(angleRad);
     pts.push(`${px},${py}`);
   }
-  return pts.join(' ');
+  return pts.join(" ");
 }
 
-/** Parse "v_x_y" into pixel coordinates (scaled). */
 function vertexToPixel(vertexId: string): { x: number; y: number } {
   const rest = vertexId.slice(2);
   const match = rest.match(/^(-?[\d.]+)_(-?[\d.]+)$/);
@@ -86,26 +97,24 @@ function vertexToPixel(vertexId: string): { x: number; y: number } {
   };
 }
 
-/** Parse "v_x_y__v_x_y" edge into two pixel endpoints. */
 function edgeToPixels(edgeId: string): {
   x1: number;
   y1: number;
   x2: number;
   y2: number;
 } {
-  const parts = edgeId.split('__');
+  const parts = edgeId.split("__");
   const p1 = vertexToPixel(parts[0]);
   const p2 = vertexToPixel(parts[1]);
   return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
 }
 
-/** Dots probability indicator: number of dots for a dice value. */
 function dotsForNumber(n: number): number {
   if (n <= 7) return n - 1;
   return 13 - n;
 }
 
-// ---- SVG keyframe animation (injected once) ----
+// ---- SVG keyframe animation ----
 
 const PULSE_KEYFRAMES = `
 @keyframes board-pulse {
@@ -113,6 +122,8 @@ const PULSE_KEYFRAMES = `
   50% { opacity: 1; }
 }
 `;
+
+const SEA_PATTERN_SIZE = PIXEL_SCALE * 2;
 
 // ---- Sub-components ----
 
@@ -127,19 +138,39 @@ function HexTileComponent({
 }) {
   const center = hexToPixel(hex.coord.q, hex.coord.r);
   const points = hexCornerPoints(center.x, center.y);
-  const color = TERRAIN_COLORS[hex.terrain];
+  const clipId = `clip-${hex.id}`;
+  const img = TERRAIN_IMAGES[hex.terrain];
 
   return (
     <g>
-      {/* Hex polygon */}
+      <defs>
+        <clipPath id={clipId}>
+          <polygon points={points} />
+        </clipPath>
+      </defs>
+      <image
+        href={img}
+        x={center.x - HEX_WIDTH / 2}
+        y={center.y - HEX_HEIGHT / 2}
+        width={HEX_WIDTH}
+        height={HEX_HEIGHT}
+        preserveAspectRatio="xMidYMid slice"
+        clipPath={`url(#${clipId})`}
+      />
       <polygon
         points={points}
-        fill={color}
-        stroke="#5d4037"
+        fill="none"
+        stroke="#333"
+        strokeWidth={4}
+        strokeLinejoin="round"
+      />
+      <polygon
+        points={points}
+        fill="none"
+        stroke="#fdf5e6"
         strokeWidth={2}
         strokeLinejoin="round"
       />
-      {/* Number token */}
       {hex.number != null && (
         <g>
           <circle
@@ -158,25 +189,23 @@ function HexTileComponent({
             fontSize={PIXEL_SCALE * 0.28}
             fontWeight="bold"
             fontFamily="Arial, sans-serif"
-            fill={hex.number === 6 || hex.number === 8 ? '#c0392b' : '#333'}
+            fill={hex.number === 6 || hex.number === 8 ? "#c0392b" : "#333"}
           >
             {hex.number}
           </text>
-          {/* Probability dots */}
           <text
             x={center.x}
             y={center.y + PIXEL_SCALE * 0.17}
             textAnchor="middle"
             dominantBaseline="central"
             fontSize={PIXEL_SCALE * 0.12}
-            fill={hex.number === 6 || hex.number === 8 ? '#c0392b' : '#666'}
+            fill={hex.number === 6 || hex.number === 8 ? "#c0392b" : "#666"}
             fontFamily="Arial, sans-serif"
           >
-            {'•'.repeat(dotsForNumber(hex.number))}
+            {"•".repeat(dotsForNumber(hex.number))}
           </text>
         </g>
       )}
-      {/* Valid hex overlay (for robber placement) */}
       {isValid && (
         <polygon
           points={points}
@@ -185,8 +214,8 @@ function HexTileComponent({
           strokeWidth={3}
           strokeDasharray="8,4"
           style={{
-            cursor: 'pointer',
-            animation: 'board-pulse 1.2s ease-in-out infinite',
+            cursor: "pointer",
+            animation: "board-pulse 1.2s ease-in-out infinite",
           }}
           onPointerDown={(e) => {
             e.stopPropagation();
@@ -204,7 +233,13 @@ function HexTileComponent({
   );
 }
 
-function RobberComponent({ hexId, hexes }: { hexId: string; hexes: Record<string, HexTile> }) {
+function RobberComponent({
+  hexId,
+  hexes,
+}: {
+  hexId: string;
+  hexes: Record<string, HexTile>;
+}) {
   const hex = hexes[hexId];
   if (!hex) return null;
   const center = hexToPixel(hex.coord.q, hex.coord.r);
@@ -225,10 +260,193 @@ function RobberComponent({ hexId, hexes }: { hexId: string; hexes: Record<string
         dominantBaseline="central"
         fontSize={PIXEL_SCALE * 0.28}
         fontFamily="Arial, sans-serif"
-        fill="#fff"
+        fill="#fdf5e6"
       >
-        {'👤'}
+        {"🥷"}
       </text>
+    </g>
+  );
+}
+
+function SettlementShape({
+  x,
+  y,
+  color,
+}: {
+  x: number;
+  y: number;
+  color: string;
+}) {
+  const s = PIXEL_SCALE * 0.16;
+  // House body
+  const bodyL = x - s;
+  const bodyR = x + s;
+  const bodyTop = y - s * 0.2;
+  const bodyBot = y + s;
+  // Roof peak
+  const roofPeak = y - s * 1.2;
+  // Chimney
+  const chimL = x + s * 0.3;
+  const chimR = x + s * 0.7;
+  const chimTop = y - s * 1.0;
+  const chimBot = y - s * 0.5;
+  // Door
+  const doorL = x - s * 0.25;
+  const doorR = x + s * 0.25;
+  const doorTop = y + s * 0.3;
+  const doorBot = bodyBot;
+
+  return (
+    <g>
+      {/* Chimney (behind roof) */}
+      <rect
+        x={chimL}
+        y={chimTop}
+        width={chimR - chimL}
+        height={chimBot - chimTop}
+        fill={color}
+        stroke="#333"
+        strokeWidth={1}
+      />
+      {/* Roof */}
+      <polygon
+        points={`${bodyL - s * 0.2},${bodyTop} ${x},${roofPeak} ${bodyR + s * 0.2},${bodyTop}`}
+        fill={color}
+        stroke="#333"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+      {/* Body */}
+      <rect
+        x={bodyL}
+        y={bodyTop}
+        width={bodyR - bodyL}
+        height={bodyBot - bodyTop}
+        fill={color}
+        stroke="#333"
+        strokeWidth={1.5}
+      />
+      {/* Door */}
+      <rect
+        x={doorL}
+        y={doorTop}
+        width={doorR - doorL}
+        height={doorBot - doorTop}
+        fill="#333"
+        rx={1}
+      />
+    </g>
+  );
+}
+
+function CityShape({ x, y, color }: { x: number; y: number; color: string }) {
+  const s = PIXEL_SCALE * 0.16;
+  // Main building (right, taller)
+  const mainL = x - s * 0.1;
+  const mainR = x + s * 1.1;
+  const mainTop = y - s * 1.4;
+  const mainBot = y + s;
+  // Side building (left, shorter)
+  const sideL = x - s * 1.1;
+  const sideR = mainL;
+  const sideTop = y - s * 0.5;
+  const sideBot = mainBot;
+  // Tower on main building
+  const towerL = x + s * 0.2;
+  const towerR = x + s * 0.8;
+  const towerTop = y - s * 2.0;
+  const towerBot = mainTop;
+  // Tower cap (pointed)
+  const capPeak = y - s * 2.5;
+  // Windows on main
+  const winSize = s * 0.3;
+  const win1x = x + s * 0.15;
+  const win2x = x + s * 0.65;
+  const winRow1y = y - s * 0.9;
+  const winRow2y = y - s * 0.2;
+
+  return (
+    <g>
+      {/* Tower */}
+      <rect
+        x={towerL}
+        y={towerTop}
+        width={towerR - towerL}
+        height={towerBot - towerTop}
+        fill={color}
+        stroke="#333"
+        strokeWidth={1.5}
+      />
+      {/* Tower cap */}
+      <polygon
+        points={`${towerL - s * 0.1},${towerTop} ${(towerL + towerR) / 2},${capPeak} ${towerR + s * 0.1},${towerTop}`}
+        fill={color}
+        stroke="#333"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+      {/* Main building */}
+      <rect
+        x={mainL}
+        y={mainTop}
+        width={mainR - mainL}
+        height={mainBot - mainTop}
+        fill={color}
+        stroke="#333"
+        strokeWidth={1.5}
+      />
+      {/* Side building */}
+      <rect
+        x={sideL}
+        y={sideTop}
+        width={sideR - sideL}
+        height={sideBot - sideTop}
+        fill={color}
+        stroke="#333"
+        strokeWidth={1.5}
+      />
+      {/* Windows on main */}
+      <rect
+        x={win1x}
+        y={winRow1y}
+        width={winSize}
+        height={winSize}
+        fill="#333"
+        rx={0.5}
+      />
+      <rect
+        x={win2x}
+        y={winRow1y}
+        width={winSize}
+        height={winSize}
+        fill="#333"
+        rx={0.5}
+      />
+      <rect
+        x={win1x}
+        y={winRow2y}
+        width={winSize}
+        height={winSize}
+        fill="#333"
+        rx={0.5}
+      />
+      <rect
+        x={win2x}
+        y={winRow2y}
+        width={winSize}
+        height={winSize}
+        fill="#333"
+        rx={0.5}
+      />
+      {/* Door */}
+      <rect
+        x={sideL + (sideR - sideL) * 0.25}
+        y={y + s * 0.3}
+        width={(sideR - sideL) * 0.5}
+        height={mainBot - (y + s * 0.3)}
+        fill="#333"
+        rx={1}
+      />
     </g>
   );
 }
@@ -241,35 +459,11 @@ function BuildingComponent({
   playerColor: string;
 }) {
   const pos = vertexToPixel(building.vertexId);
-  const isCity = building.type === 'city';
-  const size = isCity ? PIXEL_SCALE * 0.2 : PIXEL_SCALE * 0.14;
 
-  return (
-    <g>
-      <rect
-        x={pos.x - size}
-        y={pos.y - size}
-        width={size * 2}
-        height={size * 2}
-        fill={playerColor}
-        stroke="#333"
-        strokeWidth={isCity ? 2.5 : 1.5}
-        rx={isCity ? 2 : 1}
-      />
-      {isCity && (
-        <rect
-          x={pos.x - size * 0.5}
-          y={pos.y - size * 1.5}
-          width={size}
-          height={size * 0.6}
-          fill={playerColor}
-          stroke="#333"
-          strokeWidth={1.5}
-          rx={1}
-        />
-      )}
-    </g>
-  );
+  if (building.type === "city") {
+    return <CityShape x={pos.x} y={pos.y} color={playerColor} />;
+  }
+  return <SettlementShape x={pos.x} y={pos.y} color={playerColor} />;
 }
 
 function RoadComponent({
@@ -286,15 +480,26 @@ function RoadComponent({
   const { x1, y1, x2, y2 } = edgeToPixels(road.edgeId);
 
   return (
-    <line
-      x1={x1}
-      y1={y1}
-      x2={x2}
-      y2={y2}
-      stroke={playerColor}
-      strokeWidth={PIXEL_SCALE * 0.1}
-      strokeLinecap="round"
-    />
+    <g>
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke="#333"
+        strokeWidth={PIXEL_SCALE * 0.14}
+        strokeLinecap="round"
+      />
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke={playerColor}
+        strokeWidth={PIXEL_SCALE * 0.09}
+        strokeLinecap="round"
+      />
+    </g>
   );
 }
 
@@ -304,9 +509,8 @@ function PortComponent({ port }: { port: Port }) {
   const mx = (p1.x + p2.x) / 2;
   const my = (p1.y + p2.y) / 2;
 
-  // Push the label outward from center
   const dist = Math.sqrt(mx * mx + my * my);
-  const pushFactor = dist > 0 ? PIXEL_SCALE * 0.55 / dist : 0;
+  const pushFactor = dist > 0 ? (PIXEL_SCALE * 0.55) / dist : 0;
   const lx = mx + mx * pushFactor;
   const ly = my + my * pushFactor;
 
@@ -314,13 +518,12 @@ function PortComponent({ port }: { port: Port }) {
 
   return (
     <g>
-      {/* Dock lines from each port vertex */}
       <line
         x1={p1.x}
         y1={p1.y}
         x2={lx}
         y2={ly}
-        stroke="#8d6e63"
+        stroke="#fdf5e6"
         strokeWidth={2}
         strokeDasharray="4,3"
       />
@@ -329,22 +532,20 @@ function PortComponent({ port }: { port: Port }) {
         y1={p2.y}
         x2={lx}
         y2={ly}
-        stroke="#8d6e63"
+        stroke="#fdf5e6"
         strokeWidth={2}
         strokeDasharray="4,3"
       />
-      {/* Port label background */}
       <rect
         x={lx - PIXEL_SCALE * 0.38}
         y={ly - PIXEL_SCALE * 0.16}
         width={PIXEL_SCALE * 0.76}
         height={PIXEL_SCALE * 0.32}
         rx={4}
-        fill="#fff8e1"
+        fill="#fdf5e6"
         stroke="#8d6e63"
         strokeWidth={1}
       />
-      {/* Port label text */}
       <text
         x={lx}
         y={ly}
@@ -376,17 +577,15 @@ function ValidVertexMarker({
   };
   return (
     <g>
-      {/* Invisible larger hit area for touch */}
       <circle
         cx={pos.x}
         cy={pos.y}
         r={PIXEL_SCALE * 0.3}
         fill="transparent"
-        style={{ cursor: 'pointer' }}
+        style={{ cursor: "pointer" }}
         onPointerDown={handleTap}
         onClick={handleTap}
       />
-      {/* Visible marker */}
       <circle
         cx={pos.x}
         cy={pos.y}
@@ -396,7 +595,7 @@ function ValidVertexMarker({
         strokeWidth={2}
         pointerEvents="none"
         style={{
-          animation: 'board-pulse 1s ease-in-out infinite',
+          animation: "board-pulse 1s ease-in-out infinite",
         }}
       />
     </g>
@@ -418,7 +617,6 @@ function ValidEdgeMarker({
   };
   return (
     <g>
-      {/* Invisible wider hit area for touch */}
       <line
         x1={x1}
         y1={y1}
@@ -427,11 +625,10 @@ function ValidEdgeMarker({
         stroke="transparent"
         strokeWidth={PIXEL_SCALE * 0.3}
         strokeLinecap="round"
-        style={{ cursor: 'pointer' }}
+        style={{ cursor: "pointer" }}
         onPointerDown={handleTap}
         onClick={handleTap}
       />
-      {/* Visible marker */}
       <line
         x1={x1}
         y1={y1}
@@ -443,7 +640,7 @@ function ValidEdgeMarker({
         strokeDasharray="6,4"
         pointerEvents="none"
         style={{
-          animation: 'board-pulse 1s ease-in-out infinite',
+          animation: "board-pulse 1s ease-in-out infinite",
         }}
       />
     </g>
@@ -463,16 +660,14 @@ const Board: React.FC<BoardProps> = ({
 }) => {
   const { board, buildings, roads, players } = gameState;
 
-  // Build lookup from player id to hex color
   const playerColorLookup = useMemo(() => {
     const map: Record<string, string> = {};
     for (const p of players) {
-      map[p.id] = PLAYER_COLOR_MAP[p.color] || '#999';
+      map[p.id] = PLAYER_COLOR_MAP[p.color] || "#999";
     }
     return map;
   }, [players]);
 
-  // Compute viewBox from all hex centers
   const viewBox = useMemo(() => {
     let minX = Infinity,
       minY = Infinity,
@@ -491,40 +686,57 @@ const Board: React.FC<BoardProps> = ({
     return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
   }, [board.hexes]);
 
+  const [vbX, vbY, vbW, vbH] = viewBox.split(" ").map(Number);
+
   const validHexSet = useMemo(() => new Set(validHexes ?? []), [validHexes]);
 
   return (
     <svg
       viewBox={viewBox}
+      preserveAspectRatio="xMidYMid meet"
       style={{
-        width: '100%',
-        maxWidth: 700,
-        height: 'auto',
-        display: 'block',
-        margin: '0 auto',
-        touchAction: 'manipulation',
-        WebkitTapHighlightColor: 'transparent',
-        WebkitTouchCallout: 'none',
-        userSelect: 'none',
+        width: "100%",
+        height: "100%",
+        maxWidth: "100%",
+        maxHeight: "100%",
+        display: "block",
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
+        WebkitTouchCallout: "none",
+        userSelect: "none",
       }}
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Inject animation keyframes */}
       <defs>
         <style>{PULSE_KEYFRAMES}</style>
+        <pattern
+          id="pattern-sea"
+          patternUnits="userSpaceOnUse"
+          width={SEA_PATTERN_SIZE}
+          height={SEA_PATTERN_SIZE}
+        >
+          <image
+            href={imgSea}
+            x={0}
+            y={0}
+            width={SEA_PATTERN_SIZE}
+            height={SEA_PATTERN_SIZE}
+            preserveAspectRatio="xMidYMid slice"
+          />
+        </pattern>
       </defs>
 
-      {/* Ocean background */}
+      {/* Ocean background with tiled sea texture */}
       <rect
-        x={viewBox.split(' ').map(Number)[0]}
-        y={viewBox.split(' ').map(Number)[1]}
-        width={viewBox.split(' ').map(Number)[2]}
-        height={viewBox.split(' ').map(Number)[3]}
-        fill="#2980b9"
+        x={vbX}
+        y={vbY}
+        width={vbW}
+        height={vbH}
+        fill="url(#pattern-sea)"
         rx={12}
       />
 
-      {/* Layer 1: Ports (behind hexes for dock lines) */}
+      {/* Layer 1: Ports */}
       <g>
         {board.ports.map((port) => (
           <PortComponent key={port.edgeId} port={port} />
@@ -552,7 +764,7 @@ const Board: React.FC<BoardProps> = ({
           <RoadComponent
             key={road.edgeId}
             road={road}
-            playerColor={playerColorLookup[road.playerId] || '#999'}
+            playerColor={playerColorLookup[road.playerId] || "#999"}
             edges={board.edges}
           />
         ))}
@@ -575,7 +787,7 @@ const Board: React.FC<BoardProps> = ({
           <BuildingComponent
             key={building.vertexId}
             building={building}
-            playerColor={playerColorLookup[building.playerId] || '#999'}
+            playerColor={playerColorLookup[building.playerId] || "#999"}
           />
         ))}
       </g>
@@ -591,7 +803,7 @@ const Board: React.FC<BoardProps> = ({
         ))}
       </g>
 
-      {/* Layer 7: Robber (on top of everything except interactive) */}
+      {/* Layer 7: Robber */}
       <RobberComponent hexId={board.robberHexId} hexes={board.hexes} />
     </svg>
   );

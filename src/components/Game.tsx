@@ -347,6 +347,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    padding: 8,
+    padding: 4,
+    minHeight: 0,
   },
 };
