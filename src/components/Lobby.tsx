@@ -23,6 +23,7 @@ export default function Lobby() {
     localPlayerId,
     hasSavedGame,
     loadGame,
+    connectionStatus,
   } = useGameStore();
 
   const [nameInput, setNameInput] = useState(localPlayerName);
@@ -237,7 +238,13 @@ export default function Lobby() {
           onClick={handleJoin}
           disabled={isLoading}
         >
-          {isLoading ? 'Joining...' : 'Join'}
+          {isLoading
+            ? connectionStatus === 'connecting-to-server'
+              ? 'Connecting to server...'
+              : connectionStatus === 'connecting-to-host'
+                ? 'Reaching host...'
+                : 'Joining...'
+            : 'Join'}
         </button>
         <button
           style={{ ...styles.button, backgroundColor: '#666' }}
@@ -248,7 +255,10 @@ export default function Lobby() {
       </div>
       {error && (
         <div style={styles.error}>
-          {error}
+          <span style={{ flex: 1 }}>{error}</span>
+          {view === 'join' && joinCode.trim() && (
+            <button style={styles.retryBtn} onClick={handleJoin}>Retry</button>
+          )}
           <button style={styles.errorClose} onClick={clearError}>×</button>
         </div>
       )}
@@ -354,8 +364,18 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 400,
     width: '100%',
   },
+  retryBtn: {
+    padding: '4px 12px',
+    borderRadius: 4,
+    border: 'none',
+    backgroundColor: '#e67e22',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
   errorClose: {
-    marginLeft: 'auto',
     background: 'none',
     border: 'none',
     color: '#e74c3c',

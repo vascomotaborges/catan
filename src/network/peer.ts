@@ -17,9 +17,39 @@ function generateRoomCode(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Reconnection config
+// ICE / STUN / TURN configuration
 // ---------------------------------------------------------------------------
 
+const ICE_CONFIG: RTCConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+  ],
+};
+
+const PEER_DEBUG = import.meta.env.DEV ? 2 : 0;
+
+// ---------------------------------------------------------------------------
+// Connection / reconnection config
+// ---------------------------------------------------------------------------
+
+const CONNECTION_TIMEOUT_MS = 15_000;
+const HOST_RETRY_ATTEMPTS = 3;
 const RECONNECT_INTERVAL_MS = 3_000;
 const RECONNECT_TIMEOUT_MS = 30_000;
 
@@ -64,60 +94,115 @@ export class PeerManager {
 
   /**
    * Host a new room. Resolves with the human-friendly room code that other
-   * players can use to join.
+   * players can use to join. Retries with a new code on ID collisions.
    */
   hostRoom(): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-      const roomCode = generateRoomCode();
+      let attempts = 0;
 
-      this.peer = new Peer(roomCode);
-      this.isHost = true;
+      const tryHost = () => {
+        attempts++;
+        const roomCode = generateRoomCode();
 
-      this.peer.on('open', (id) => {
-        this.peerId = id;
-        this.setupHostListeners();
-        resolve(id);
-      });
+        this.peer = new Peer(roomCode, { config: ICE_CONFIG, debug: PEER_DEBUG });
+        this.isHost = true;
 
-      this.peer.on('error', (err) => {
-        // If the room code is already taken, PeerJS fires an error with
-        // type 'unavailable-id'. We could retry with a new code, but for
-        // simplicity we surface it.
-        reject(err);
-      });
+        this.peer.on('open', (id) => {
+          this.peerId = id;
+          this.setupHostListeners();
+          resolve(id);
+        });
+
+        this.peer.on('error', (err: any) => {
+          if (err.type === 'unavailable-id' && attempts < HOST_RETRY_ATTEMPTS) {
+            this.peer?.destroy();
+            tryHost();
+          } else {
+            reject(err);
+          }
+        });
+      };
+
+      tryHost();
     });
   }
 
   /**
-   * Join an existing room as a client.
+   * Join an existing room as a client. Includes timeouts for both signaling
+   * and data-channel stages, plus user-friendly error messages.
    */
-  joinRoom(roomCode: string, playerName: string): Promise<void> {
+  joinRoom(
+    roomCode: string,
+    playerName: string,
+    onProgress?: (status: 'connecting-to-server' | 'connecting-to-host') => void,
+  ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      // Create our own Peer with a random id (let PeerJS assign one).
-      this.peer = new Peer();
+      let settled = false;
+      let peerTimer: ReturnType<typeof setTimeout> | undefined;
+      let connTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const fail = (reason: string | Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(peerTimer);
+        clearTimeout(connTimer);
+        this.peer?.destroy();
+        this.peer = null;
+        reject(typeof reason === 'string' ? new Error(reason) : reason);
+      };
+
+      onProgress?.('connecting-to-server');
+
+      this.peer = new Peer({ config: ICE_CONFIG, debug: PEER_DEBUG });
       this.isHost = false;
 
+      peerTimer = setTimeout(() => {
+        fail('Could not connect to the signaling server. Check your internet connection.');
+      }, CONNECTION_TIMEOUT_MS);
+
       this.peer.on('open', (id) => {
+        clearTimeout(peerTimer);
         this.peerId = id;
+
+        onProgress?.('connecting-to-host');
 
         const conn = this.peer!.connect(roomCode, {
           reliable: true,
           metadata: { playerName },
         });
 
+        connTimer = setTimeout(() => {
+          fail(
+            'Connected to server but could not reach the host. ' +
+            'The room code may be wrong, or the host may be on a restrictive network.'
+          );
+        }, CONNECTION_TIMEOUT_MS);
+
         conn.on('open', () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(connTimer);
           this.hostConnection = conn;
           this.setupClientConnection(conn);
           resolve();
         });
 
         conn.on('error', (err) => {
-          reject(err);
+          clearTimeout(connTimer);
+          fail(err);
         });
       });
 
-      this.peer.on('error', (err) => {
-        reject(err);
+      this.peer.on('error', (err: any) => {
+        clearTimeout(peerTimer);
+        clearTimeout(connTimer);
+        if (err.type === 'peer-unavailable') {
+          fail(`Room "${roomCode}" not found. Check the code and try again.`);
+        } else if (err.type === 'network') {
+          fail('Cannot reach the connection server. Check your internet connection.');
+        } else {
+          fail(err.message || String(err));
+        }
       });
     });
   }

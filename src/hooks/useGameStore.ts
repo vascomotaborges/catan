@@ -37,6 +37,13 @@ export function clearSavedGame(): void {
 
 // ---- Store types ----
 
+export type ConnectionStatus =
+  | 'idle'
+  | 'connecting-to-server'
+  | 'connecting-to-host'
+  | 'connected'
+  | 'reconnecting';
+
 export interface GameStore {
   // State
   gameState: GameState | null;
@@ -44,6 +51,7 @@ export interface GameStore {
   localPlayerName: string;
   peerManager: PeerManager | null;
   isConnected: boolean;
+  connectionStatus: ConnectionStatus;
   roomCode: string | null;
   error: string | null;
   hasSavedGame: boolean;
@@ -69,6 +77,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     localPlayerName: localStorage.getItem('catan_player_name') || '',
     peerManager: null,
     isConnected: false,
+    connectionStatus: 'idle' as ConnectionStatus,
     roomCode: null,
     error: null,
     hasSavedGame: loadFromStorage() !== null,
@@ -122,11 +131,12 @@ export const useGameStore = create<GameStore>((set, get) => {
       });
 
       try {
+        set({ connectionStatus: 'connecting-to-server' });
         const roomCode = await pm.hostRoom();
-        set({ roomCode, isConnected: true });
+        set({ roomCode, isConnected: true, connectionStatus: 'connected' });
         return roomCode;
       } catch (err: any) {
-        set({ error: `Failed to host: ${err.message || err}` });
+        set({ error: `Failed to create room: ${err.message || err}`, connectionStatus: 'idle' });
         throw err;
       }
     },
@@ -147,16 +157,20 @@ export const useGameStore = create<GameStore>((set, get) => {
       });
 
       pm.onPlayerDisconnected(() => {
-        set({ error: 'Lost connection to host. Attempting to reconnect...' });
+        set({ error: 'Lost connection to host. Attempting to reconnect...', connectionStatus: 'reconnecting' });
       });
 
       pm.onPlayerConnected(() => {
-        set({ error: null, isConnected: true });
+        set({ error: null, isConnected: true, connectionStatus: 'connected' });
       });
 
       try {
-        await pm.joinRoom(roomCode.toUpperCase(), localPlayerName);
-        set({ roomCode, isConnected: true });
+        await pm.joinRoom(
+          roomCode.toUpperCase(),
+          localPlayerName,
+          (status) => set({ connectionStatus: status }),
+        );
+        set({ roomCode, isConnected: true, connectionStatus: 'connected' });
 
         pm.sendToHost({
           type: 'action',
@@ -168,7 +182,7 @@ export const useGameStore = create<GameStore>((set, get) => {
           playerId: localPlayerId,
         });
       } catch (err: any) {
-        set({ error: `Failed to join: ${err.message || err}` });
+        set({ error: err.message || String(err), connectionStatus: 'idle' });
         throw err;
       }
     },
@@ -213,6 +227,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         gameState: null,
         peerManager: null,
         isConnected: false,
+        connectionStatus: 'idle' as ConnectionStatus,
         roomCode: null,
         error: null,
         hasSavedGame: false,
