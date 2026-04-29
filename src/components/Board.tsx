@@ -188,8 +188,14 @@ function HexTileComponent({
             cursor: 'pointer',
             animation: 'board-pulse 1.2s ease-in-out infinite',
           }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onClick?.();
+          }}
           onClick={(e) => {
             e.stopPropagation();
+            e.preventDefault();
             onClick?.();
           }}
         />
@@ -363,23 +369,37 @@ function ValidVertexMarker({
   onClick: () => void;
 }) {
   const pos = vertexToPixel(vertexId);
+  const handleTap = (e: React.PointerEvent | React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onClick();
+  };
   return (
-    <circle
-      cx={pos.x}
-      cy={pos.y}
-      r={PIXEL_SCALE * 0.14}
-      fill="rgba(46, 204, 113, 0.7)"
-      stroke="#27ae60"
-      strokeWidth={2}
-      style={{
-        cursor: 'pointer',
-        animation: 'board-pulse 1s ease-in-out infinite',
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-    />
+    <g>
+      {/* Invisible larger hit area for touch */}
+      <circle
+        cx={pos.x}
+        cy={pos.y}
+        r={PIXEL_SCALE * 0.3}
+        fill="transparent"
+        style={{ cursor: 'pointer' }}
+        onPointerDown={handleTap}
+        onClick={handleTap}
+      />
+      {/* Visible marker */}
+      <circle
+        cx={pos.x}
+        cy={pos.y}
+        r={PIXEL_SCALE * 0.14}
+        fill="rgba(46, 204, 113, 0.7)"
+        stroke="#27ae60"
+        strokeWidth={2}
+        pointerEvents="none"
+        style={{
+          animation: 'board-pulse 1s ease-in-out infinite',
+        }}
+      />
+    </g>
   );
 }
 
@@ -391,25 +411,42 @@ function ValidEdgeMarker({
   onClick: () => void;
 }) {
   const { x1, y1, x2, y2 } = edgeToPixels(edgeId);
+  const handleTap = (e: React.PointerEvent | React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onClick();
+  };
   return (
-    <line
-      x1={x1}
-      y1={y1}
-      x2={x2}
-      y2={y2}
-      stroke="rgba(46, 204, 113, 0.8)"
-      strokeWidth={PIXEL_SCALE * 0.12}
-      strokeLinecap="round"
-      strokeDasharray="6,4"
-      style={{
-        cursor: 'pointer',
-        animation: 'board-pulse 1s ease-in-out infinite',
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-    />
+    <g>
+      {/* Invisible wider hit area for touch */}
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke="transparent"
+        strokeWidth={PIXEL_SCALE * 0.3}
+        strokeLinecap="round"
+        style={{ cursor: 'pointer' }}
+        onPointerDown={handleTap}
+        onClick={handleTap}
+      />
+      {/* Visible marker */}
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke="rgba(46, 204, 113, 0.8)"
+        strokeWidth={PIXEL_SCALE * 0.12}
+        strokeLinecap="round"
+        strokeDasharray="6,4"
+        pointerEvents="none"
+        style={{
+          animation: 'board-pulse 1s ease-in-out infinite',
+        }}
+      />
+    </g>
   );
 }
 
@@ -466,6 +503,9 @@ const Board: React.FC<BoardProps> = ({
         display: 'block',
         margin: '0 auto',
         touchAction: 'manipulation',
+        WebkitTapHighlightColor: 'transparent',
+        WebkitTouchCallout: 'none',
+        userSelect: 'none',
       }}
       xmlns="http://www.w3.org/2000/svg"
     >
