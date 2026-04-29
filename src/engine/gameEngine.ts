@@ -39,7 +39,9 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function rollDie(): number {
-  return Math.floor(Math.random() * 6) + 1;
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  return (arr[0] % 6) + 1;
 }
 
 function canAfford(resources: PlayerResources, cost: Partial<PlayerResources>): boolean {
