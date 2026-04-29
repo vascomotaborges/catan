@@ -53,7 +53,7 @@ const PLAYER_COLOR_MAP: Record<string, string> = {
 
 const PORT_EMOJI: Record<PortType, string> = {
   any: "3:1",
-  wood: "2:1 🌲",
+  wood: "2:1 🪵",
   brick: "2:1 🧱",
   sheep: "2:1 🐑",
   wheat: "2:1 🌾",

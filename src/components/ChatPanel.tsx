@@ -7,7 +7,7 @@ const RESOURCE_ICONS: Record<Resource, string> = {
   brick: '🧱',
   sheep: '🐑',
   wheat: '🌾',
-  ore: '⛰️',
+  ore: '🪨',
 };
 
 const PLAYER_COLORS_MAP: Record<string, string> = {

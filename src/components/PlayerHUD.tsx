@@ -14,7 +14,7 @@ const RESOURCE_ICONS: Record<Resource, string> = {
   brick: '🧱',
   sheep: '🐑',
   wheat: '🌾',
-  ore: '⛰️',
+  ore: '🪨',
 };
 
 interface PlayerHUDProps {

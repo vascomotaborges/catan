@@ -12,6 +12,7 @@ import {
   GameOverDialog,
   WaitingDiscardDialog,
 } from './Dialogs';
+import ReferenceCards from './ReferenceCards';
 import type { DevCardType } from '../types';
 import {
   getValidSettlementVertices,
@@ -170,6 +171,7 @@ export default function Game() {
           onEdgeClick={handleEdgeClick}
           onHexClick={handleHexClick}
         />
+        <ReferenceCards />
       </div>
 
       {/* Player HUD */}
@@ -271,6 +273,7 @@ export default function Game() {
       {gameState.phase === 'game_over' && (
         <GameOverDialog gameState={gameState} onNewGame={resetGame} />
       )}
+
     </div>
   );
 }
@@ -349,5 +352,6 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     padding: 4,
     minHeight: 0,
+    position: 'relative',
   },
 };
